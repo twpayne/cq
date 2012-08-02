@@ -59,6 +59,8 @@ def main(argv):
     option_parser.add_option('--closure-library-path', metavar='PATH')
     option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), metavar='PATH')
     option_parser.add_option('--reindex', action='store_true')
+    option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
+    option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
     config_parser = ConfigParser.ConfigParser(os.environ)
     config_parser.read(os.path.join(os.environ['HOME'], '.cqrc'))
     for key, section, option, func in (
@@ -105,16 +107,23 @@ def main(argv):
         rows = cursor.fetchall()
         if len(rows) == 0:
             print '%s: no matches' % (arg,)
-        elif len(rows) == 1:
-            if len(args) != 1:
-                print '%s:' % (arg,)
-            for i in xrange(rows[0][2], rows[0][3] + 1):
-                print linecache.getline(rows[0][1], i + 1).rstrip()
         else:
-            if len(args) != 1:
-                print '%s:' % (arg,)
-            for row in rows:
-                print row[0]
+            mode = options.mode
+            if mode is None:
+                mode = 'code' if len(rows) == 1 else 'list'
+            if mode == 'code':
+                if len(args) != 1:
+                    print '%s:' % (arg,)
+                for i, row in enumerate(rows):
+                    if i:
+                        print
+                    for j in xrange(row[2], row[3] + 1):
+                        print linecache.getline(row[1], j + 1).rstrip()
+            else:
+                if len(args) != 1:
+                    print '%s:' % (arg,)
+                for row in rows:
+                    print row[0]
 
 
 if __name__ == '__main__':
