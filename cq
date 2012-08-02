@@ -1,0 +1,121 @@
+#!/usr/bin/env python
+# FIXME multiple libraries
+# FIXME pager
+
+import ConfigParser
+import linecache
+import optparse
+import os
+import re
+import sqlite3
+import sys
+import tempfile
+
+
+def doreindex(closure_library_path, index_database):
+    with tempfile.NamedTemporaryFile() as ntf:
+        connection = sqlite3.connect(ntf.name)
+        cursor = connection.cursor()
+        cursor.execute('''CREATE TABLE `index` (key STRING NOT NULL, path STRING NOT NULL, firstline INTEGER NOT NULL, lastline INTEGER NOT NULL)''')
+        connection.commit()
+        for dirpath, dirnames, filenames in os.walk(closure_library_path):
+            for filename in filenames:
+                if not filename.endswith('.js'):
+                    continue
+                path = os.path.join(dirpath, filename)
+                firstline = None
+                closingline = None
+                with open(path) as f:
+                    for i, line in enumerate(f):
+                        if line.startswith('/**'):
+                            firstline = i
+                            closingline = None
+                            continue
+                        if closingline:
+                            if line == '\n':
+                                cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i - 1))
+                                firstline = None
+                                closingline = None
+                                continue
+                        if firstline:
+                            m = re.match('^(\S+)\s+=', line)
+                            if m:
+                                key = m.group(1)
+                                continue
+                            if line == '};\n':
+                                closingline = i
+                                continue
+                    if firstline:
+                        cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i))
+            connection.commit()
+            if '.svn' in dirnames:
+                dirnames.remove('.svn')
+        os.rename(ntf.name, index_database)
+        ntf.delete = False
+
+
+def main(argv):
+    option_parser = optparse.OptionParser()
+    option_parser.add_option('--closure-library-path', metavar='PATH')
+    option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), metavar='PATH')
+    option_parser.add_option('--reindex', action='store_true')
+    config_parser = ConfigParser.ConfigParser(os.environ)
+    config_parser.read(os.path.join(os.environ['HOME'], '.cqrc'))
+    for key, section, option, func in (
+            ('closure_library_path', 'closure-library', 'path', config_parser.get),
+            ('index_database', 'index', 'database', config_parser.get)):
+        try:
+            option_parser.set_default(key, func(section, option))
+        except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
+            pass
+    options, args = option_parser.parse_args(sys.argv[1:])
+
+    reindex = options.reindex
+    connection = None
+    cursor = None
+
+    if not os.path.exists(options.index_database):
+        reindex = True
+    elif os.stat(argv[0]).st_mtime > os.stat(options.index_database).st_mtime:
+        reindex = True
+    else:
+        connection = sqlite3.connect(options.index_database)
+        cursor = connection.cursor()
+        paths = set()
+        for arg in args:
+            cursor.execute('SELECT path FROM `index` WHERE key LIKE ?', (arg,))
+            for row in cursor:
+                paths.add(row[0])
+        index_database_mtime = os.stat(options.index_database).st_mtime
+        for path in paths:
+            if os.stat(path).st_mtime > index_database_mtime:
+                reindex = True
+
+    if reindex:
+        doreindex(options.closure_library_path, options.index_database)
+        connection = None
+        del cursor
+
+    if connection is None:
+        connection = sqlite3.connect(options.index_database)
+        cursor = connection.cursor()
+
+    for arg in args:
+        cursor.execute('SELECT key, path, firstline, lastline FROM `index` WHERE key LIKE ? ORDER BY key', (arg,))
+        rows = cursor.fetchall()
+        if len(rows) == 0:
+            print '%s: no matches' % (arg,)
+        elif len(rows) == 1:
+            if len(args) != 1:
+                print '%s:' % (arg,)
+            for i in xrange(rows[0][2], rows[0][3] + 1):
+                print linecache.getline(rows[0][1], i + 1).rstrip()
+        else:
+            if len(args) != 1:
+                print '%s:' % (arg,)
+            for row in rows:
+                print row[0]
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
