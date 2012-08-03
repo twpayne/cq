@@ -17,29 +17,51 @@ def doreindexpath(root_path, cursor):
             if not filename.endswith('.js'):
                 continue
             path = os.path.join(dirpath, filename)
+            state = 0
             firstline = None
-            closingline = None
+            key = None
+            lastline = None
             with open(path) as f:
                 for i, line in enumerate(f):
-                    if line.startswith('/**'):
-                        firstline = i
-                        closingline = None
-                        continue
-                    if closingline:
-                        if line == '\n':
-                            cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i - 1))
-                            firstline = None
-                            closingline = None
+                    line = re.sub(r'\s*//.*$', '', line)
+                    if state == 0:
+                        if line == '/**\n':
+                            firstline = i
+                            state = 1
                             continue
-                    if firstline:
+                    elif state == 1:
+                        if line == '/**\n':
+                            firstline = i
+                            continue
+                        m = re.match('^(?:var\s+)?(\S+)\s+=.*;$', line)
+                        if m:
+                            key = m.group(1)
+                            state = 4
+                            continue
+                        m = re.match('^(\S+)\s+=\s+\[$', line)
+                        if m:
+                            key = m.group(1)
+                            state = 3
+                            continue
                         m = re.match('^(\S+)\s+=', line)
                         if m:
                             key = m.group(1)
+                            state = 2
                             continue
+                    elif state == 2:
                         if line == '};\n':
-                            closingline = i
+                            state = 4
                             continue
-            if firstline:
+                    elif state == 3:
+                        if line == '];\n':
+                            state = 4
+                            continue
+                    elif state == 4:
+                        if line == '\n':
+                            cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i - 1))
+                            state = 0
+                            continue
+            if state == 4:
                 cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i))
         if '.git' in dirnames:
             dirnames.remove('.git')
@@ -126,6 +148,7 @@ def main(argv):
                     print '%s:' % (arg,)
                 for i, row in enumerate(rows):
                     if i:
+                        print
                         print
                     for j in xrange(row[2], row[3] + 1):
                         print linecache.getline(row[1], j + 1).rstrip()
