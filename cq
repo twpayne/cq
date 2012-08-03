@@ -86,7 +86,10 @@ def main(argv):
 
     cqrc_filename = os.path.join(os.environ['HOME'], '.cqrc')
 
-    option_parser = optparse.OptionParser()
+    option_parser = optparse.OptionParser(add_help_option=False)
+    option_parser.add_option('--with-filename', '-H', action='store_true', dest='filename')
+    option_parser.add_option('--no-filename', '-h', action='store_false', dest='filename')
+    option_parser.add_option('--line-number', '-n', action='store_true')
     option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), metavar='PATH')
     option_parser.add_option('--reindex', action='store_true')
     option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
@@ -135,7 +138,7 @@ def main(argv):
         cursor = connection.cursor()
 
     for arg in args:
-        cursor.execute('SELECT key, path, firstline, lastline FROM `index` WHERE key LIKE ? ORDER BY key', (arg,))
+        cursor.execute('SELECT key, path, firstline, lastline FROM `index` WHERE key LIKE ? ORDER BY path, firstline', (arg,))
         rows = cursor.fetchall()
         if len(rows) == 0:
             print '%s: no matches' % (arg,)
@@ -152,11 +155,17 @@ def main(argv):
                         print
                     for j in xrange(row[2], row[3] + 1):
                         print linecache.getline(row[1], j + 1).rstrip()
-            else:
+            elif mode == 'list':
                 if len(args) != 1:
                     print '%s:' % (arg,)
                 for row in rows:
-                    print row[0]
+                    fields = []
+                    if options.filename:
+                        fields.append(row[1])
+                    if options.line_number:
+                        fields.append(str(row[2]))
+                    fields.append(row[0])
+                    print ':'.join(fields)
 
 
 if __name__ == '__main__':
