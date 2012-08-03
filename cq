@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# FIXME multiple libraries
 # FIXME pager
 
 import ConfigParser
@@ -12,65 +11,74 @@ import sys
 import tempfile
 
 
-def doreindex(closure_library_path, index_database):
+def doreindexpath(root_path, cursor):
+    for dirpath, dirnames, filenames in os.walk(root_path):
+        for filename in filenames:
+            if not filename.endswith('.js'):
+                continue
+            path = os.path.join(dirpath, filename)
+            firstline = None
+            closingline = None
+            with open(path) as f:
+                for i, line in enumerate(f):
+                    if line.startswith('/**'):
+                        firstline = i
+                        closingline = None
+                        continue
+                    if closingline:
+                        if line == '\n':
+                            cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i - 1))
+                            firstline = None
+                            closingline = None
+                            continue
+                    if firstline:
+                        m = re.match('^(\S+)\s+=', line)
+                        if m:
+                            key = m.group(1)
+                            continue
+                        if line == '};\n':
+                            closingline = i
+                            continue
+            if firstline:
+                cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i))
+        if '.git' in dirnames:
+            dirnames.remove('.git')
+        if '.svn' in dirnames:
+            dirnames.remove('.svn')
+
+
+def doreindex(root_paths, index_database):
     with tempfile.NamedTemporaryFile() as ntf:
         connection = sqlite3.connect(ntf.name)
         cursor = connection.cursor()
         cursor.execute('''CREATE TABLE `index` (key STRING NOT NULL, path STRING NOT NULL, firstline INTEGER NOT NULL, lastline INTEGER NOT NULL)''')
         connection.commit()
-        for dirpath, dirnames, filenames in os.walk(closure_library_path):
-            for filename in filenames:
-                if not filename.endswith('.js'):
-                    continue
-                path = os.path.join(dirpath, filename)
-                firstline = None
-                closingline = None
-                with open(path) as f:
-                    for i, line in enumerate(f):
-                        if line.startswith('/**'):
-                            firstline = i
-                            closingline = None
-                            continue
-                        if closingline:
-                            if line == '\n':
-                                cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i - 1))
-                                firstline = None
-                                closingline = None
-                                continue
-                        if firstline:
-                            m = re.match('^(\S+)\s+=', line)
-                            if m:
-                                key = m.group(1)
-                                continue
-                            if line == '};\n':
-                                closingline = i
-                                continue
-                    if firstline:
-                        cursor.execute('INSERT INTO `index` (key, path, firstline, lastline) VALUES (?, ?, ?, ?)', (key, path, firstline, i))
+        for path in root_paths:
+            doreindexpath(path, cursor)
             connection.commit()
-            if '.svn' in dirnames:
-                dirnames.remove('.svn')
         os.rename(ntf.name, index_database)
         ntf.delete = False
 
 
 def main(argv):
+
+    cqrc_filename = os.path.join(os.environ['HOME'], '.cqrc')
+
     option_parser = optparse.OptionParser()
-    option_parser.add_option('--closure-library-path', metavar='PATH')
     option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), metavar='PATH')
     option_parser.add_option('--reindex', action='store_true')
     option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
     option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
-    config_parser = ConfigParser.ConfigParser(os.environ)
-    config_parser.read(os.path.join(os.environ['HOME'], '.cqrc'))
-    for key, section, option, func in (
-            ('closure_library_path', 'closure-library', 'path', config_parser.get),
-            ('index_database', 'index', 'database', config_parser.get)):
-        try:
-            option_parser.set_default(key, func(section, option))
-        except (ConfigParser.NoSectionError, ConfigParser.NoOptionError):
-            pass
     options, args = option_parser.parse_args(sys.argv[1:])
+
+    config_parser = ConfigParser.ConfigParser(os.environ)
+    config_parser.read(cqrc_filename)
+    root_paths = set()
+    for section in config_parser.sections():
+        try:
+            root_paths.add(config_parser.get(section, 'path'))
+        except ConfigParser.NoOptionError:
+            pass
 
     reindex = options.reindex
     connection = None
@@ -78,23 +86,25 @@ def main(argv):
 
     if not os.path.exists(options.index_database):
         reindex = True
+    elif os.stat(cqrc_filename).st_mtime > os.stat(options.index_database).st_mtime:
+        reindex = True
     elif os.stat(argv[0]).st_mtime > os.stat(options.index_database).st_mtime:
         reindex = True
     else:
         connection = sqlite3.connect(options.index_database)
         cursor = connection.cursor()
-        paths = set()
+        matched_paths = set()
         for arg in args:
             cursor.execute('SELECT path FROM `index` WHERE key LIKE ?', (arg,))
             for row in cursor:
-                paths.add(row[0])
+                matched_paths.add(row[0])
         index_database_mtime = os.stat(options.index_database).st_mtime
-        for path in paths:
-            if os.stat(path).st_mtime > index_database_mtime:
+        for matched_path in matched_paths:
+            if os.stat(matched_path).st_mtime > index_database_mtime:
                 reindex = True
 
     if reindex:
-        doreindex(options.closure_library_path, options.index_database)
+        doreindex(root_paths, options.index_database)
         connection = None
         del cursor
 
