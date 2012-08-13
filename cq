@@ -9,6 +9,7 @@ import re
 import sqlite3
 import sys
 import tempfile
+import shutil
 
 
 def doreindexpath(root_path, cursor):
@@ -78,7 +79,7 @@ def doreindex(root_paths, index_database):
         for path in root_paths:
             doreindexpath(path, cursor)
             connection.commit()
-        os.rename(ntf.name, index_database)
+        shutil.move(ntf.name, index_database)
         ntf.delete = False
 
 
