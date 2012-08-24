@@ -95,6 +95,7 @@ def main(argv):
     option_parser.add_option('--reindex', action='store_true')
     option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
     option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
+    option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode')
     options, args = option_parser.parse_args(sys.argv[1:])
 
     config_parser = ConfigParser.ConfigParser(os.environ)
@@ -138,34 +139,53 @@ def main(argv):
         connection = sqlite3.connect(options.index_database)
         cursor = connection.cursor()
 
-    for arg in args:
-        cursor.execute('SELECT key, path, firstline, lastline FROM `index` WHERE key LIKE ? ORDER BY path, firstline', (arg,))
-        rows = cursor.fetchall()
-        if len(rows) == 0:
-            print '%s: no matches' % (arg,)
+    if options.mode in (None, 'code', 'list'):
+        for arg in args:
+            cursor.execute('SELECT key, path, firstline, lastline FROM `index` WHERE key LIKE ? ORDER BY path, firstline', (arg,))
+            rows = cursor.fetchall()
+            if len(rows) == 0:
+                print '%s: no matches' % (arg,)
+            else:
+                mode = options.mode
+                if mode is None:
+                    mode = 'code' if len(rows) == 1 else 'list'
+                if mode == 'code':
+                    if len(args) != 1:
+                        print '%s:' % (arg,)
+                    for i, row in enumerate(rows):
+                        if i:
+                            print
+                            print
+                        for j in xrange(row[2], row[3] + 1):
+                            print linecache.getline(row[1], j + 1).rstrip()
+                elif mode == 'list':
+                    if len(args) != 1:
+                        print '%s:' % (arg,)
+                    for row in rows:
+                        fields = []
+                        if options.filename:
+                            fields.append(row[1])
+                        if options.line_number:
+                            fields.append(str(row[2]))
+                        fields.append(row[0])
+                        print ':'.join(fields)
+    elif options.mode == 'file':
+        paths = set()
+        for arg in args:
+            cursor.execute('SELECT path FROM `index` WHERE key LIKE ?', (arg,))
+            for row in cursor:
+                paths.add(row[0])
+        if len(paths) == 0:
+            print 'no matches'
         else:
-            mode = options.mode
-            if mode is None:
-                mode = 'code' if len(rows) == 1 else 'list'
-            if mode == 'code':
-                if len(args) != 1:
-                    print '%s:' % (arg,)
-                for i, row in enumerate(rows):
-                    if i:
-                        print
-                        print
-                    for j in xrange(row[2], row[3] + 1):
-                        print linecache.getline(row[1], j + 1).rstrip()
-            elif mode == 'list':
-                if len(args) != 1:
-                    print '%s:' % (arg,)
-                for row in rows:
+            for path in sorted(paths):
+                for i, line in enumerate(open(path)):
                     fields = []
                     if options.filename:
-                        fields.append(row[1])
+                        fields.append(path)
                     if options.line_number:
-                        fields.append(str(row[2]))
-                    fields.append(row[0])
+                        fields.append(str(i + 1))
+                    fields.append(line.rstrip())
                     print ':'.join(fields)
 
 
