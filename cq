@@ -157,7 +157,13 @@ def main(argv):
                             print
                             print
                         for j in xrange(row[2], row[3] + 1):
-                            print linecache.getline(row[1], j + 1).rstrip()
+                            fields = []
+                            if options.filename:
+                                fields.append(row[1])
+                            if options.line_number:
+                                fields.append(str(j + 1))
+                            fields.append(linecache.getline(row[1], j + 1).rstrip())
+                            print ':'.join(fields)
                 elif mode == 'list':
                     if len(args) != 1:
                         print '%s:' % (arg,)
