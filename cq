@@ -88,10 +88,18 @@ def doreindex(root_paths, index_database):
         ntf.delete = False
 
 
-def printhierarchy(root, children, indent='  ', prefix=''):
-    print prefix + root
-    for child in sorted(children[root]):
-        printhierarchy(child, children, indent, prefix + indent)
+def printhierarchy(root, children, prefix=''):
+    print prefix[:-1] + '+-' + root
+    prefix += ' '
+    for i, child in enumerate(sorted(children[root])):
+        print prefix + '|'
+        if children[child]:
+            if i == len(children[root]) - 1:
+                printhierarchy(child, children, prefix + ' ')
+            else:
+                printhierarchy(child, children, prefix + '|')
+        else:
+            print prefix + '+-' + child
 
 
 def main(argv):
@@ -214,7 +222,9 @@ def main(argv):
         roots = set(tree.iterkeys())
         for parent, children in tree.iteritems():
             roots = roots - children
-        for root in sorted(roots):
+        for i, root in enumerate(sorted(roots)):
+            if i:
+                print
             printhierarchy(root, tree)
 
 
