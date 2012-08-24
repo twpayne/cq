@@ -2,6 +2,7 @@
 # FIXME pager
 
 import ConfigParser
+from collections import defaultdict
 import linecache
 import optparse
 import os
@@ -25,6 +26,9 @@ def doreindexpath(root_path, cursor):
             with open(path) as f:
                 for i, line in enumerate(f):
                     line = re.sub(r'\s*//.*$', '', line)
+                    m = re.match(r'goog.inherits\((\S+),\s*(\S+)\);', line)
+                    if m:
+                        cursor.execute('INSERT INTO inheritance (child, parent) VALUES (?, ?)', (m.group(1), m.group(2)))
                     if state == 0:
                         if line == '/**\n':
                             firstline = i
@@ -75,12 +79,19 @@ def doreindex(root_paths, index_database):
         connection = sqlite3.connect(ntf.name)
         cursor = connection.cursor()
         cursor.execute('''CREATE TABLE `index` (key STRING NOT NULL, path STRING NOT NULL, firstline INTEGER NOT NULL, lastline INTEGER NOT NULL)''')
+        cursor.execute('''CREATE TABLE inheritance (child STRING NOT NULL, parent STRING NOT NULL)''')
         connection.commit()
         for path in root_paths:
             doreindexpath(path, cursor)
             connection.commit()
         shutil.move(ntf.name, index_database)
         ntf.delete = False
+
+
+def printhierarchy(root, children, indent='  ', prefix=''):
+    print prefix + root
+    for child in sorted(children[root]):
+        printhierarchy(child, children, indent, prefix + indent)
 
 
 def main(argv):
@@ -96,6 +107,7 @@ def main(argv):
     option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
     option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
     option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode')
+    option_parser.add_option('--inheritance', action='store_const', const='inheritance', dest='mode')
     options, args = option_parser.parse_args(sys.argv[1:])
 
     config_parser = ConfigParser.ConfigParser(os.environ)
@@ -193,6 +205,18 @@ def main(argv):
                         fields.append(str(i + 1))
                     fields.append(line.rstrip())
                     print ':'.join(fields)
+    elif options.mode == 'inheritance':
+        tree = defaultdict(set)
+        for arg in args:
+            cursor.execute('SELECT child, parent FROM inheritance WHERE parent LIKE ?', (arg,))
+            for row in cursor:
+                tree[row[1]].add(row[0])
+        roots = set(tree.iterkeys())
+        for parent, children in tree.iteritems():
+            roots = roots - children
+        for root in sorted(roots):
+            printhierarchy(root, tree)
+
 
 
 if __name__ == '__main__':
