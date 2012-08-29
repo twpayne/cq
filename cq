@@ -115,7 +115,7 @@ def main(argv):
     option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
     option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
     option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode')
-    option_parser.add_option('--inheritance', action='store_const', const='inheritance', dest='mode')
+    option_parser.add_option('--inheritance', '-i', action='store_const', const='inheritance', dest='mode')
     options, args = option_parser.parse_args(sys.argv[1:])
 
     config_parser = ConfigParser.ConfigParser(os.environ)
