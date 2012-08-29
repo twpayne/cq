@@ -147,7 +147,11 @@ def main(argv):
                 matched_paths.add(row[0])
         index_database_mtime = os.stat(options.index_database).st_mtime
         for matched_path in matched_paths:
-            if os.stat(matched_path).st_mtime > index_database_mtime:
+            try:
+                if os.stat(matched_path).st_mtime > index_database_mtime:
+                    reindex = True
+                    break
+            except OSError:
                 reindex = True
                 break
 
