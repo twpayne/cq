@@ -149,6 +149,7 @@ def main(argv):
         for matched_path in matched_paths:
             if os.stat(matched_path).st_mtime > index_database_mtime:
                 reindex = True
+                break
 
     if reindex:
         doreindex(root_paths, options.index_database)
