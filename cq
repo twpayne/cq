@@ -116,7 +116,10 @@ def main(argv):
     option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
     option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode')
     option_parser.add_option('--inheritance', '-i', action='store_const', const='inheritance', dest='mode')
+    option_parser.add_option('--substring', '-s', action='store_true')
     options, args = option_parser.parse_args(sys.argv[1:])
+    if options.substring:
+        args = ['%' + arg + '%' for arg in args]
 
     config_parser = ConfigParser.ConfigParser(os.environ)
     config_parser.read(cqrc_filename)
