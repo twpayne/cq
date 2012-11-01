@@ -22,7 +22,6 @@ def doreindexpath(root_path, cursor):
             state = 0
             firstline = None
             key = None
-            lastline = None
             with open(path) as f:
                 for i, line in enumerate(f):
                     line = re.sub(r'\s*//.*$', '', line)
