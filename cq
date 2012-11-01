@@ -107,17 +107,21 @@ def main(argv):
     cqrc_filename = os.path.join(os.environ['HOME'], '.cqrc')
 
     option_parser = optparse.OptionParser(add_help_option=False)
-    option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode')
-    option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode')
-    option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), metavar='PATH')
-    option_parser.add_option('--inheritance', '-i', action='store_const', const='inheritance', dest='mode')
-    option_parser.add_option('--line-number', '-n', action='store_true')
-    option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode')
-    option_parser.add_option('--no-filename', '-h', action='store_false', dest='filename')
-    option_parser.add_option('--reindex', action='store_true')
-    option_parser.add_option('--substring', '-s', action='store_true')
-    option_parser.add_option('--with-filename', '-H', action='store_true', dest='filename')
+    option_parser.add_option('--help', action='store_true')
+    option_parser.add_option('--code', '-c', action='store_const', const='code', dest='mode', help='show function')
+    option_parser.add_option('--file', '-f', action='store_const', const='file', dest='mode', help='show entire file')
+    option_parser.add_option('--index-database', default=os.path.join(os.environ['HOME'], '.cqdb'), help='set database', metavar='PATH')
+    option_parser.add_option('--inheritance', '-i', action='store_const', const='inheritance', dest='mode', help='show inheritance hierarchy')
+    option_parser.add_option('--line-number', '-n', action='store_true', help='show line numbers')
+    option_parser.add_option('--list', '-l', action='store_const', const='list', dest='mode', help='show list of matches')
+    option_parser.add_option('--no-filename', '-h', action='store_false', dest='filename', help='don\'t show filename')
+    option_parser.add_option('--reindex', action='store_true', help='reindex')
+    option_parser.add_option('--substring', '-s', action='store_true', help='search for substring')
+    option_parser.add_option('--with-filename', '-H', action='store_true', dest='filename', help='show filename')
     options, args = option_parser.parse_args(sys.argv[1:])
+    if options.help:
+        option_parser.print_help()
+        return
     if options.substring:
         args = ['%' + arg + '%' for arg in args]
 
